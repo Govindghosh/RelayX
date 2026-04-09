@@ -1,9 +1,10 @@
-import { FormEvent, useState } from "react";
+import { type FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { login } from "../api/client";
-import type { Session } from "../auth";
-import AuthShell from "../components/AuthShell";
+import AuthShell from "../components/auth/AuthShell";
+import { APP_ROUTES } from "../constants/storage";
+import { login } from "../services/api/client";
+import type { Session } from "../types/session";
 
 type LoginPageProps = {
   onAuthenticated: (session: Session) => void;
@@ -18,8 +19,8 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setIsSubmitting(true);
     setError("");
+    setIsSubmitting(true);
 
     try {
       const response = await login(email, password);
@@ -28,9 +29,9 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
         refreshToken: response.refresh_token,
         user: response.user,
       });
-      navigate("/chat");
+      navigate(APP_ROUTES.chat);
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Unable to sign in");
+      setError(submitError instanceof Error ? submitError.message : "Unable to login");
     } finally {
       setIsSubmitting(false);
     }
@@ -38,37 +39,48 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
 
   return (
     <AuthShell
-      title="Welcome back"
-      description="Sign in to continue your Phase 1 RelayX chat workspace."
       alternateLabel="Need an account? Create one"
-      alternateTo="/signup"
+      alternateTo={APP_ROUTES.signup}
+      description="Sign in to the RelayX Phase 1 workspace. Your JWT session will be stored locally and refreshed when needed."
+      mode="login"
+      title="Welcome back"
     >
-      <form className="auth-form" onSubmit={handleSubmit}>
-        <label>
-          <span>Email</span>
+      <form className="space-y-5" onSubmit={handleSubmit}>
+        <div className="space-y-2">
+          <label className="text-sm font-semibold text-slate-200" htmlFor="login-email">
+            Email
+          </label>
           <input
-            autoComplete="email"
+            className="w-full rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-cyan-300/40 focus:bg-slate-950/70"
+            id="login-email"
             onChange={(event) => setEmail(event.target.value)}
             placeholder="name@example.com"
             type="email"
             value={email}
           />
-        </label>
+        </div>
 
-        <label>
-          <span>Password</span>
+        <div className="space-y-2">
+          <label className="text-sm font-semibold text-slate-200" htmlFor="login-password">
+            Password
+          </label>
           <input
-            autoComplete="current-password"
+            className="w-full rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-cyan-300/40 focus:bg-slate-950/70"
+            id="login-password"
             onChange={(event) => setPassword(event.target.value)}
             placeholder="At least 8 characters"
             type="password"
             value={password}
           />
-        </label>
+        </div>
 
-        {error ? <p className="form-error">{error}</p> : null}
+        {error ? <p className="rounded-2xl border border-rose-400/25 bg-rose-400/10 px-4 py-3 text-sm text-rose-100">{error}</p> : null}
 
-        <button className="primary-button" disabled={isSubmitting} type="submit">
+        <button
+          className="w-full rounded-full bg-gradient-to-r from-cyan-400 via-teal-400 to-amber-300 px-5 py-3 text-sm font-bold text-slate-950 transition hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={isSubmitting}
+          type="submit"
+        >
           {isSubmitting ? "Signing in..." : "Login"}
         </button>
       </form>

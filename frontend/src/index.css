@@ -1,0 +1,60 @@
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap");
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "IBM Plex Sans", sans-serif;
+  --font-display: "Fraunces", serif;
+  --animate-float: float 4.5s ease-in-out infinite;
+  --animate-spin-slow: spin 9s linear infinite;
+  --animate-spin-reverse: spin-reverse 11s linear infinite;
+  --animate-twinkle: twinkle 1.9s ease-in-out infinite;
+
+  @keyframes float {
+    0%,
+    100% {
+      transform: translateY(0px);
+    }
+    50% {
+      transform: translateY(-6px);
+    }
+  }
+
+  @keyframes spin-reverse {
+    from {
+      transform: rotate(360deg);
+    }
+    to {
+      transform: rotate(0deg);
+    }
+  }
+
+  @keyframes twinkle {
+    0%,
+    100% {
+      transform: scale(1);
+      opacity: 0.7;
+    }
+    50% {
+      transform: scale(1.15);
+      opacity: 1;
+    }
+  }
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+  }
+
+  body {
+    @apply min-h-screen bg-slate-950 text-slate-100 antialiased;
+  }
+
+  #root {
+    @apply min-h-screen;
+  }
+}
+
+@utility glass-panel {
+  @apply border border-white/10 bg-white/[0.06] shadow-[0_24px_80px_rgba(15,23,42,0.55)] backdrop-blur-xl;
+}

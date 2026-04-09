@@ -1,72 +1,57 @@
 # RelayX
 
-RelayX is being built in disciplined phases. This repository currently targets **Phase 1: Foundation**:
+RelayX is a phased real-time chat system. The repo is currently aligned to Phase 1 with a layered FastAPI backend, PostgreSQL persistence, and a React + Tailwind CSS v4 frontend.
+
+## Current Stack
 
 - FastAPI auth service
-- FastAPI chat service with direct DB-backed WebSockets
-- React frontend for signup, login, and chat
-- PostgreSQL for user and message storage
+- FastAPI chat service with WebSockets
+- PostgreSQL for users and messages
+- React + Vite + Tailwind CSS v4 frontend
 - Docker Compose for local development
 
-## Monorepo Structure
+## Main Docs
 
-```text
-relayx/
-├── docker-compose.yml
-├── docs/
-├── frontend/
-├── infra/
-└── services/
-    ├── auth-service/
-    └── chat-service/
-```
+- [Project structure](./docs/project-structure.md)
+- [Install and learning guide](./docs/install-and-learning-guide.md)
+- [Phase 1 tech decisions](./docs/phase-1-tech-decisions.md)
 
-## Phase Rules
-
-- No Kafka or Kubernetes in Phase 1
-- Keep each phase working and tested
-- Commit after milestones
-- Prefer running the stack through Docker
-
-## Services
-
-- `auth-service` exposes `POST /signup`, `POST /login`, `POST /refresh`, `GET /me`, and `GET /users`
-- `chat-service` exposes `GET /messages/{peer_id}` and `GET /health`, plus a WebSocket endpoint at `/ws`
-- `frontend` provides signup, login, and a simple two-user chat UI
-
-## Local Run
-
-1. Copy `.env.example` to `.env` if you want to override defaults.
-2. Start the stack:
+## Quick Start
 
 ```bash
-docker compose up --build
+docker compose up --build -d
 ```
 
-3. Open the app at `http://localhost:5173`
-4. Create two users in separate tabs or browsers and start chatting
+Open `http://localhost:5173`
 
-## Tests
-
-Backend tests:
+## Verification Commands
 
 ```bash
-cd services/auth-service && pytest
-cd services/chat-service && pytest
+docker compose run --build --rm auth-service pytest
+docker compose run --build --rm chat-service pytest
+docker compose run --build --rm frontend npm run build
 ```
 
-Frontend production build:
+Or run the helper script:
 
-```bash
-cd frontend && npm run build
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\phase1-docker-checks.ps1
 ```
 
-## Phase 1 Goal Check
+## Environment
 
-- Auth with JWT access and refresh tokens
-- PostgreSQL-backed users and messages
-- Simple single-instance WebSocket chat
-- React UI with token persistence and live messaging
-- Docker Compose local stack
+The services are aligned with the root `.env` and `.env.example`:
+
+```env
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=relayx
+JWT_SECRET_KEY=...
+JWT_REFRESH_SECRET_KEY=...
+SECRET_EXPIRY=15m
+REFRESH_EXPIRY=7d
+```
+
+## Status
 
 Phase 1 complete. Ready for next phase.

@@ -1,0 +1,6 @@
+EMAIL_ALREADY_REGISTERED = "Email already registered"
+INVALID_EMAIL_OR_PASSWORD = "Invalid email or password"
+INVALID_OR_EXPIRED_TOKEN = "Invalid or expired token"
+MISSING_ACCESS_TOKEN = "Missing access token"
+USER_NOT_FOUND = "User not found"
+SUCCESS_STATUS = "ok"

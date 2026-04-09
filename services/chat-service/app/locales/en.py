@@ -1,0 +1,5 @@
+INVALID_OR_EXPIRED_TOKEN = "Invalid or expired token"
+MISSING_ACCESS_TOKEN = "Missing access token"
+INVALID_MESSAGE_PAYLOAD = "Invalid message payload"
+MESSAGE_CONTENT_EMPTY = "Message content cannot be empty"
+SUCCESS_STATUS = "ok"

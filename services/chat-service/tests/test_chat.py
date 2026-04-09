@@ -2,9 +2,9 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
-from app.auth import create_access_token
 from app.config import Settings
 from app.main import create_app
+from app.utils.token_utils import create_access_token
 
 
 def test_websocket_message_delivery_and_history():

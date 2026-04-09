@@ -1,7 +1,10 @@
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 
-import { CHAT_WS_URL, type ChatMessage, type ChatSocketEvent, getMessages, listUsers, withAuthorizedAccess } from "../api/client";
-import type { RelayUser, Session } from "../auth";
+import ConversationPanel from "../components/chat/ConversationPanel";
+import UserDirectory from "../components/chat/UserDirectory";
+import { ENV } from "../config/env";
+import { getMessages, listUsers, withAuthorizedAccess } from "../services/api/client";
+import type { ChatMessage, ChatSocketEvent, RelayUser, Session } from "../types/session";
 
 type ChatPageProps = {
   session: Session;
@@ -40,7 +43,7 @@ export default function ChatPage({ session, onLogout, onSessionChange }: ChatPag
       setError("");
 
       try {
-        const nextUsers = await withAuthorizedAccess({
+        const availableUsers = await withAuthorizedAccess({
           session,
           onSessionChange,
           onLogout,
@@ -51,8 +54,8 @@ export default function ChatPage({ session, onLogout, onSessionChange }: ChatPag
           return;
         }
 
-        setUsers(nextUsers);
-        setSelectedUserId((current) => current ?? nextUsers[0]?.id ?? null);
+        setUsers(availableUsers);
+        setSelectedUserId((current) => current ?? availableUsers[0]?.id ?? null);
       } catch (loadError) {
         if (!isActive) {
           return;
@@ -121,7 +124,7 @@ export default function ChatPage({ session, onLogout, onSessionChange }: ChatPag
 
   useEffect(() => {
     setConnectionStatus("connecting");
-    const socket = new WebSocket(`${CHAT_WS_URL}?token=${encodeURIComponent(session.accessToken)}`);
+    const socket = new WebSocket(`${ENV.chatWsUrl}?token=${encodeURIComponent(session.accessToken)}`);
     websocketRef.current = socket;
 
     socket.onopen = () => {
@@ -142,7 +145,6 @@ export default function ChatPage({ session, onLogout, onSessionChange }: ChatPag
         }
 
         const message = payload.message;
-
         const currentSelectedUserId = selectedUserIdRef.current;
         const currentUserId = currentUserIdRef.current;
 
@@ -166,6 +168,7 @@ export default function ChatPage({ session, onLogout, onSessionChange }: ChatPag
         setError("Could not parse WebSocket payload");
       }
     };
+
     socket.onerror = () => setError("WebSocket connection error");
     socket.onclose = () => setConnectionStatus("disconnected");
 
@@ -199,93 +202,31 @@ export default function ChatPage({ session, onLogout, onSessionChange }: ChatPag
   }
 
   return (
-    <main className="chat-shell">
-      <aside className="chat-sidebar">
-        <div className="sidebar-header">
-          <div>
-            <p className="eyebrow">RelayX</p>
-            <h1>Phase 1 Chat</h1>
-          </div>
-          <button className="ghost-button" onClick={onLogout} type="button">
-            Logout
-          </button>
-        </div>
+    <main className="relative min-h-screen overflow-hidden bg-slate-950 px-6 py-8 text-slate-100">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.14),_transparent_26rem),radial-gradient(circle_at_bottom_right,_rgba(245,158,11,0.15),_transparent_20rem)]" />
+      <div className="relative mx-auto grid max-w-7xl gap-6 lg:grid-cols-[24rem_1fr]">
+        <UserDirectory
+          connectionStatus={connectionStatus}
+          currentUser={session.user}
+          isUsersLoading={isUsersLoading}
+          onLogout={onLogout}
+          onSelectUser={setSelectedUserId}
+          selectedUserId={selectedUserId}
+          users={users}
+        />
 
-        <section className="current-user">
-          <strong>{session.user.email}</strong>
-          <span>Socket: {connectionStatus}</span>
-        </section>
-
-        <section className="user-list">
-          <div className="section-heading">
-            <span>Available users</span>
-            {isUsersLoading ? <small>Loading...</small> : <small>{users.length} found</small>}
-          </div>
-
-          {users.length === 0 && !isUsersLoading ? (
-            <p className="empty-state">Create a second account in another tab or browser to start chatting.</p>
-          ) : null}
-
-          {users.map((user) => (
-            <button
-              className={user.id === selectedUserId ? "user-card user-card-active" : "user-card"}
-              key={user.id}
-              onClick={() => setSelectedUserId(user.id)}
-              type="button"
-            >
-              <strong>{user.email}</strong>
-              <span>{user.id}</span>
-            </button>
-          ))}
-        </section>
-      </aside>
-
-      <section className="chat-panel">
-        <header className="chat-header">
-          <div>
-            <p className="eyebrow">Conversation</p>
-            <h2>{selectedUser?.email ?? "Choose a user"}</h2>
-          </div>
-          {selectedUser ? <span className="conversation-pill">{selectedUser.id}</span> : null}
-        </header>
-
-        {error ? <p className="form-error chat-error">{error}</p> : null}
-
-        <div className="messages-panel">
-          {isMessagesLoading ? <p className="empty-state">Loading conversation...</p> : null}
-
-          {!isMessagesLoading && messages.length === 0 ? (
-            <p className="empty-state">No messages yet. Start with a quick hello.</p>
-          ) : null}
-
-          {messages.map((message) => {
-            const isOwnMessage = message.sender_id === session.user.id;
-
-            return (
-              <article className={isOwnMessage ? "message-bubble message-bubble-own" : "message-bubble"} key={message.id}>
-                <span>{message.content}</span>
-                <small>{new Date(message.created_at).toLocaleString()}</small>
-              </article>
-            );
-          })}
-        </div>
-
-        <form className="composer" onSubmit={handleSendMessage}>
-          <textarea
-            onChange={(event) => setDraft(event.target.value)}
-            placeholder={selectedUser ? `Message ${selectedUser.email}` : "Select a user to start chatting"}
-            rows={3}
-            value={draft}
-          />
-          <button
-            className="primary-button"
-            disabled={!selectedUserId || connectionStatus !== "connected" || draft.trim().length === 0}
-            type="submit"
-          >
-            Send message
-          </button>
-        </form>
-      </section>
+        <ConversationPanel
+          connectionStatus={connectionStatus}
+          currentUserId={session.user.id}
+          draft={draft}
+          error={error}
+          isMessagesLoading={isMessagesLoading}
+          messages={messages}
+          onDraftChange={setDraft}
+          onSendMessage={handleSendMessage}
+          selectedUser={selectedUser}
+        />
+      </div>
     </main>
   );
 }

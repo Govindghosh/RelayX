@@ -38,6 +38,18 @@ This file explains the tools chosen for Phase 1, why we use them, what breaks or
 - **If we do not use it:** UI iteration becomes slower or we lose the component-based flow we need for chat screens.
 - **Alternatives:** Next.js, Vue, Svelte.
 
+## Tailwind CSS v4
+
+- **Why we use it:** Tailwind v4 gives us fast UI iteration, consistent spacing and typography, and easy custom theming for the chat interface.
+- **If we do not use it:** styling becomes more repetitive and the frontend design system is harder to keep consistent as the app grows.
+- **Alternatives:** CSS Modules, Styled Components, plain CSS, Chakra UI, MUI.
+
+## Layered Service Structure
+
+- **Why we use it:** splitting code into config, controllers, middleware, models, routes, services, utils, validators, jobs, queues, and workers makes the project easier to read and easier to scale later.
+- **If we do not use it:** logic gets mixed together, onboarding becomes slower, and later Redis/Kafka work becomes harder to place cleanly.
+- **Alternatives:** feature-first modules, a flatter small-service layout, or domain-driven folder structures.
+
 ## Docker Compose
 
 - **Why we use it:** Compose lets us start the full Phase 1 stack consistently with one command.
