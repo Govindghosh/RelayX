@@ -1,57 +1,52 @@
-# RelayX
+# RelayX 🚀
 
-RelayX is a phased real-time chat system. The repo is currently aligned to Phase 1 with a layered FastAPI backend, PostgreSQL persistence, and a React + Tailwind CSS v4 frontend.
+RelayX is a high-scale, asynchronous real-time chat system built with microservices. 
 
-## Current Stack
+## 🏗️ Architecture
 
-- FastAPI auth service
-- FastAPI chat service with WebSockets
-- PostgreSQL for users and messages
-- React + Vite + Tailwind CSS v4 frontend
-- Docker Compose for local development
+- **Auth Service**: FastAPI-based JWT identity provider.
+- **Chat Gateway**: FastAPI WebSocket server using Redis Pub/Sub for horizontal scaling.
+- **Message Bus**: Apache Kafka for durable, asynchronous message delivery.
+- **Message Consumer**: Dedicated background service for optimistic database synchronization.
+- **Observability**: Prometheus, Grafana, and Loki/Promtail stack for metrics and logs.
 
-## Main Docs
-
-- [Project structure](./docs/project-structure.md)
-- [Install and learning guide](./docs/install-and-learning-guide.md)
-- [Phase 1 tech decisions](./docs/phase-1-tech-decisions.md)
-
-## Quick Start
+## 🚀 Quick Start (Development)
 
 ```bash
 docker compose up --build -d
 ```
+Access Frontend: `http://localhost:5173`
+Access Grafana: `http://localhost:3000` (admin/admin)
 
-Open `http://localhost:5173`
+## 🚢 Production Deployment
 
-## Verification Commands
+RelayX is production-ready with multi-stage Docker builds and Gunicorn/Nginx servers.
 
+### 1. Configure Production Environment
+Copy `.env.example` to `.env` and fill in your production secrets.
+
+### 2. Deploy via Docker Compose
 ```bash
-docker compose run --build --rm auth-service pytest
-docker compose run --build --rm chat-service pytest
-docker compose run --build --rm frontend npm run build
+docker compose -f docker-compose.prod.yml up -d --build
 ```
+This will start the stack on port **80** (Frontend) and use the production-hardened images.
 
-Or run the helper script:
+## 🤖 CI/CD Pipeline
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\phase1-docker-checks.ps1
-```
+The project includes an automated GitHub Actions pipeline (`.github/workflows/main.yml`):
+- **Lint**: Ruff (Python).
+- **Test**: Pytest for backend logic.
+- **Push**: Automated builds and pushes to GitHub Container Registry (GHCR).
 
-## Environment
+## 🛡️ Security & Observability
 
-The services are aligned with the root `.env` and `.env.example`:
+- **No Hardcoding**: All configurations are strictly environment-driven.
+- **Metrics**: Real-time throughput and error tracking via `/metrics` and Grafana.
+- **Logging**: Centralized log streaming to Loki.
 
-```env
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=postgres
-POSTGRES_DB=relayx
-JWT_SECRET_KEY=...
-JWT_REFRESH_SECRET_KEY=...
-SECRET_EXPIRY=15m
-REFRESH_EXPIRY=7d
-```
-
-## Status
-
-Phase 1 complete. Ready for next phase.
+## 🏁 Roadmap Status
+- [x] Phase 1: Foundation
+- [x] Phase 2: Real-time Scalability (Redis)
+- [x] Phase 3: Message Persistence (Kafka)
+- [x] Phase 4: Observability & Monitoring
+- [x] Phase 5: Deployment & CI/CD

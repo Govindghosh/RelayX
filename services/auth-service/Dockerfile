@@ -13,4 +13,4 @@ COPY app ./app
 COPY tests ./tests
 COPY server.py ./server.py
 
-CMD ["python", "server.py"]
+CMD ["gunicorn", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "app.main:app", "--bind", "0.0.0.0:8000"]

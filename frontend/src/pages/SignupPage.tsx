@@ -1,10 +1,15 @@
-import { type FormEvent, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import AuthShell from "../components/auth/AuthShell";
 import { APP_ROUTES } from "../constants/storage";
-import { signup } from "../services/api/client";
+import { SignupSchema, type SignupFormData } from "../types/schemas";
+import axiosInstance from "../api/axiosInstance";
+import SummaryApi from "../api/SummaryApi";
 import type { Session } from "../types/session";
+import { useAppDispatch } from "../store";
+import { setCredentials } from "../store/slices/authSlice";
 
 type SignupPageProps = {
   onAuthenticated: (session: Session) => void;
@@ -12,26 +17,46 @@ type SignupPageProps = {
 
 export default function SignupPage({ onAuthenticated }: SignupPageProps) {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const dispatch = useAppDispatch();
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<SignupFormData>({
+    resolver: zodResolver(SignupSchema),
+  });
+
+  async function onSubmit(data: SignupFormData) {
     setError("");
     setIsSubmitting(true);
 
     try {
-      const response = await signup(email, password);
-      onAuthenticated({
-        accessToken: response.access_token,
-        refreshToken: response.refresh_token,
-        user: response.user,
+      const response = await axiosInstance({
+        ...SummaryApi.auth.signup,
+        data: {
+          email: data.email,
+          password: data.password,
+        },
       });
+
+      const sessionData = {
+        accessToken: response.data.access_token,
+        refreshToken: response.data.refresh_token,
+        user: response.data.user,
+      };
+
+      dispatch(setCredentials({ 
+        user: response.data.user, 
+        token: response.data.access_token 
+      }));
+
+      onAuthenticated(sessionData);
       navigate(APP_ROUTES.chat);
-    } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Unable to create account");
+    } catch (submitError: any) {
+      setError(submitError.response?.data?.message || "Unable to create account");
     } finally {
       setIsSubmitting(false);
     }
@@ -45,19 +70,20 @@ export default function SignupPage({ onAuthenticated }: SignupPageProps) {
       mode="signup"
       title="Create workspace access"
     >
-      <form className="space-y-5" onSubmit={handleSubmit}>
+      <form className="space-y-5" onSubmit={handleSubmit(onSubmit)}>
         <div className="space-y-2">
           <label className="text-sm font-semibold text-slate-200" htmlFor="signup-email">
             Email
           </label>
           <input
-            className="w-full rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-cyan-300/40 focus:bg-slate-950/70"
+            {...register("email")}
+            className={`w-full rounded-2xl border bg-slate-950/50 px-4 py-3 text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-cyan-300/40 focus:bg-slate-950/70 ${
+              errors.email ? "border-rose-400" : "border-white/10"
+            }`}
             id="signup-email"
-            onChange={(event) => setEmail(event.target.value)}
             placeholder="name@example.com"
-            type="email"
-            value={email}
           />
+          {errors.email && <p className="text-xs text-rose-400">{errors.email.message}</p>}
         </div>
 
         <div className="space-y-2">
@@ -65,14 +91,31 @@ export default function SignupPage({ onAuthenticated }: SignupPageProps) {
             Password
           </label>
           <input
-            className="w-full rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-cyan-300/40 focus:bg-slate-950/70"
+            {...register("password")}
+            className={`w-full rounded-2xl border bg-slate-950/50 px-4 py-3 text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-cyan-300/40 focus:bg-slate-950/70 ${
+              errors.password ? "border-rose-400" : "border-white/10"
+            }`}
             id="signup-password"
-            minLength={8}
-            onChange={(event) => setPassword(event.target.value)}
             placeholder="At least 8 characters"
             type="password"
-            value={password}
           />
+          {errors.password && <p className="text-xs text-rose-400">{errors.password.message}</p>}
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm font-semibold text-slate-200" htmlFor="signup-confirm-password">
+            Confirm Password
+          </label>
+          <input
+            {...register("confirmPassword")}
+            className={`w-full rounded-2xl border bg-slate-950/50 px-4 py-3 text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-cyan-300/40 focus:bg-slate-950/70 ${
+              errors.confirmPassword ? "border-rose-400" : "border-white/10"
+            }`}
+            id="signup-confirm-password"
+            placeholder="Repeat your password"
+            type="password"
+          />
+          {errors.confirmPassword && <p className="text-xs text-rose-400">{errors.confirmPassword.message}</p>}
         </div>
 
         {error ? <p className="rounded-2xl border border-rose-400/25 bg-rose-400/10 px-4 py-3 text-sm text-rose-100">{error}</p> : null}

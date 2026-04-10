@@ -11,7 +11,7 @@ from app.validators import MessageResponse
 def build_http_router(db_dependency, current_user_id_dependency) -> APIRouter:
     router = APIRouter(tags=[MESSAGE_TAG])
 
-    @router.get("/messages/{peer_id}", response_model=list[MessageResponse])
+    @router.get("/messages", response_model=list[MessageResponse])
     def get_messages_route(
         peer_id: str,
         database_session: Annotated[Session, Depends(db_dependency)],

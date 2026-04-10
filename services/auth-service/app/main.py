@@ -35,8 +35,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
 
     app.include_router(build_health_router())
-    app.include_router(build_auth_router(db_dependency, settings))
-    app.include_router(build_user_router(db_dependency, current_user_dependency))
+    app.include_router(build_auth_router(db_dependency, settings), prefix="/api/v1/auth")
+    app.include_router(build_user_router(db_dependency, current_user_dependency), prefix="/api/v1/auth")
+    app.include_router(build_user_router(db_dependency, current_user_dependency), prefix="/api/v1")
+
+    # Instrumentation for Phase 4
+    from prometheus_fastapi_instrumentator import Instrumentator
+    Instrumentator().instrument(app).expose(app)
 
     return app
 

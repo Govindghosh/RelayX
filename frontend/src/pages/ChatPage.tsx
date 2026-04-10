@@ -1,9 +1,9 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
-
+import { useQuery } from "@tanstack/react-query";
 import ConversationPanel from "../components/chat/ConversationPanel";
 import UserDirectory from "../components/chat/UserDirectory";
-import { ENV } from "../config/env";
-import { getMessages, listUsers, withAuthorizedAccess } from "../services/api/client";
+import axiosInstance from "../api/axiosInstance";
+import SummaryApi from "../api/SummaryApi";
 import type { ChatMessage, ChatSocketEvent, RelayUser, Session } from "../types/session";
 
 type ChatPageProps = {
@@ -13,20 +13,16 @@ type ChatPageProps = {
 };
 
 export default function ChatPage({ session, onLogout, onSessionChange }: ChatPageProps) {
-  const [users, setUsers] = useState<RelayUser[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState("");
-  const [isUsersLoading, setIsUsersLoading] = useState(true);
-  const [isMessagesLoading, setIsMessagesLoading] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState("connecting");
   const websocketRef = useRef<WebSocket | null>(null);
   const selectedUserIdRef = useRef<string | null>(selectedUserId);
   const currentUserIdRef = useRef<string>(session.user.id);
 
-  const selectedUser = users.find((user) => user.id === selectedUserId) ?? null;
-
+  // Sync refs
   useEffect(() => {
     selectedUserIdRef.current = selectedUserId;
   }, [selectedUserId]);
@@ -35,96 +31,41 @@ export default function ChatPage({ session, onLogout, onSessionChange }: ChatPag
     currentUserIdRef.current = session.user.id;
   }, [session.user.id]);
 
-  useEffect(() => {
-    let isActive = true;
-
-    async function loadUsers() {
-      setIsUsersLoading(true);
-      setError("");
-
-      try {
-        const availableUsers = await withAuthorizedAccess({
-          session,
-          onSessionChange,
-          onLogout,
-          request: listUsers,
-        });
-
-        if (!isActive) {
-          return;
-        }
-
-        setUsers(availableUsers);
-        setSelectedUserId((current) => current ?? availableUsers[0]?.id ?? null);
-      } catch (loadError) {
-        if (!isActive) {
-          return;
-        }
-
-        setError(loadError instanceof Error ? loadError.message : "Unable to load users");
-      } finally {
-        if (isActive) {
-          setIsUsersLoading(false);
-        }
+  // Fetch users with React Query
+  const { data: users = [], isLoading: isUsersLoading } = useQuery({
+    queryKey: ["users"],
+    queryFn: async () => {
+      const response = await axiosInstance(SummaryApi.auth.listUsers);
+      const data = response.data as RelayUser[];
+      if (!selectedUserId && data.length > 0) {
+        setSelectedUserId(data[0].id);
       }
-    }
+      return data;
+    },
+  });
 
-    void loadUsers();
+  const selectedUser = users.find((user) => user.id === selectedUserId) ?? null;
 
-    return () => {
-      isActive = false;
-    };
-  }, [session, onLogout, onSessionChange]);
+  // Fetch messages with React Query
+  const { isLoading: isMessagesLoading } = useQuery({
+    queryKey: ["messages", selectedUserId],
+    enabled: !!selectedUserId,
+    queryFn: async () => {
+      const response = await axiosInstance({
+        ...SummaryApi.chat.getMessages,
+        params: { peer_id: selectedUserId },
+      });
+      const data = response.data as ChatMessage[];
+      setMessages(data);
+      return data;
+    },
+  });
 
-  useEffect(() => {
-    if (!selectedUserId) {
-      setMessages([]);
-      return;
-    }
-
-    let isActive = true;
-
-    async function loadConversation() {
-      setIsMessagesLoading(true);
-      setError("");
-      const peerId = selectedUserId as string;
-
-      try {
-        const conversation = await withAuthorizedAccess({
-          session,
-          onSessionChange,
-          onLogout,
-          request: (accessToken) => getMessages(peerId, accessToken),
-        });
-
-        if (!isActive) {
-          return;
-        }
-
-        setMessages(conversation);
-      } catch (loadError) {
-        if (!isActive) {
-          return;
-        }
-
-        setError(loadError instanceof Error ? loadError.message : "Unable to load messages");
-      } finally {
-        if (isActive) {
-          setIsMessagesLoading(false);
-        }
-      }
-    }
-
-    void loadConversation();
-
-    return () => {
-      isActive = false;
-    };
-  }, [selectedUserId, session, onLogout, onSessionChange]);
-
+  // WebSocket alignment
   useEffect(() => {
     setConnectionStatus("connecting");
-    const socket = new WebSocket(`${ENV.chatWsUrl}?token=${encodeURIComponent(session.accessToken)}`);
+    const wsUrl = `${SummaryApi.ws.chat}?token=${encodeURIComponent(session.accessToken)}`;
+    const socket = new WebSocket(wsUrl);
     websocketRef.current = socket;
 
     socket.onopen = () => {
@@ -140,29 +81,23 @@ export default function ChatPage({ session, onLogout, onSessionChange }: ChatPag
           return;
         }
 
-        if (!payload.message) {
-          return;
-        }
+        if (!payload.message) return;
 
         const message = payload.message;
         const currentSelectedUserId = selectedUserIdRef.current;
         const currentUserId = currentUserIdRef.current;
 
         setMessages((current) => {
-          const alreadyExists = current.some((existingMessage) => existingMessage.id === message.id);
-          if (alreadyExists || !currentSelectedUserId) {
-            return current;
-          }
+          const alreadyExists = current.some((m) => m.id === message.id);
+          if (alreadyExists || !currentSelectedUserId) return current;
 
-          const isRelevantConversation =
+          const isRelevant =
             (message.sender_id === currentSelectedUserId && message.receiver_id === currentUserId) ||
             (message.receiver_id === currentSelectedUserId && message.sender_id === currentUserId);
 
-          if (!isRelevantConversation) {
-            return current;
-          }
+          if (!isRelevant) return current;
 
-          return [...current, message].sort((left, right) => left.created_at.localeCompare(right.created_at));
+          return [...current, message].sort((a, b) => a.created_at.localeCompare(b.created_at));
         });
       } catch {
         setError("Could not parse WebSocket payload");
@@ -183,21 +118,14 @@ export default function ChatPage({ session, onLogout, onSessionChange }: ChatPag
     const websocket = websocketRef.current;
     const content = draft.trim();
 
-    if (!selectedUserId || !content) {
+    if (!selectedUserId || !content || !websocket || websocket.readyState !== WebSocket.OPEN) {
+      if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+        setError("WebSocket is not connected");
+      }
       return;
     }
 
-    if (!websocket || websocket.readyState !== WebSocket.OPEN) {
-      setError("WebSocket is not connected");
-      return;
-    }
-
-    websocket.send(
-      JSON.stringify({
-        receiver_id: selectedUserId,
-        content,
-      }),
-    );
+    websocket.send(JSON.stringify({ receiver_id: selectedUserId, content }));
     setDraft("");
   }
 

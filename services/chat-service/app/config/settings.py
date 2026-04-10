@@ -20,13 +20,16 @@ class Settings(BaseSettings):
     app_name: str = "RelayX Chat Service"
     environment: str = "development"
     database_url: str | None = None
-    postgres_user: str = "postgres"
-    postgres_password: str = "postgres"
-    postgres_db: str = "relayx"
-    postgres_host: str = "postgres"
-    postgres_port: int = 5432
-    jwt_secret_key: str = Field(default="relayx-access-secret-key-relayx", min_length=16)
-    cors_origins: list[str] = ["http://localhost:5173"]
+    postgres_user: str
+    postgres_password: str
+    postgres_db: str
+    postgres_host: str
+    postgres_port: int
+    jwt_secret_key: str = Field(min_length=16)
+    cors_origins: list[str]
+    redis_host: str
+    redis_port: int
+    kafka_bootstrap_servers: str
 
     model_config = SettingsConfigDict(
         env_file=discover_env_files(),

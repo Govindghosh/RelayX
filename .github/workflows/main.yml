@@ -1,0 +1,83 @@
+name: Continuous Integration & Deployment
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME_PREFIX: ${{ github.repository }}
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies (Auth Service)
+        run: |
+          pip install -r services/auth-service/requirements.txt
+          pip install pytest ruff
+
+      - name: Lint with Ruff
+        run: ruff check .
+
+      - name: Run Tests (Auth Service)
+        run: |
+          cd services/auth-service
+          pytest
+
+  build-and-push:
+    needs: lint-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        include:
+          - context: ./services/auth-service
+            image: relayx-auth
+          - context: ./services/chat-service
+            image: relayx-chat
+          - context: ./services/message-consumer
+            image: relayx-message-consumer
+          - context: ./frontend
+            image: relayx-frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_PREFIX }}/${{ matrix.image }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.context }}
+          push: true
+          tags: ${{ id.meta.outputs.tags }}
+          labels: ${{ id.meta.outputs.labels }}
+          build-args: |
+            VITE_AUTH_API_URL=${{ secrets.VITE_AUTH_API_URL }}
+            VITE_CHAT_API_URL=${{ secrets.VITE_CHAT_API_URL }}
+            VITE_CHAT_WS_URL=${{ secrets.VITE_CHAT_WS_URL }}

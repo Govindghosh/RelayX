@@ -1,12 +1,22 @@
+import uuid
+from datetime import UTC, datetime
+
 from fastapi import HTTPException, WebSocket, WebSocketDisconnect, status
 
 from app.locales import en
 from app.middleware.auth_middleware import resolve_websocket_user_id
-from app.services.chat_service import persist_message
-from app.validators import MessageInput, WebSocketEvent
+from app.middleware.rate_limiter import websocket_rate_limit_check
+from app.validators import MessageInput, WebSocketEvent, MessageResponse
 
 
-async def handle_websocket_session(websocket: WebSocket, settings, connection_service, session_factory) -> None:
+async def handle_websocket_session(
+    websocket: WebSocket, 
+    settings, 
+    connection_service, 
+    session_factory,
+    rate_limiter,
+    kafka_producer
+) -> None:
     token = websocket.query_params.get("token")
 
     try:
@@ -20,6 +30,10 @@ async def handle_websocket_session(websocket: WebSocket, settings, connection_se
     try:
         while True:
             incoming_payload = await websocket.receive_json()
+            
+            # Phase 2: Apply Rate Limiting
+            if not await websocket_rate_limit_check(websocket, current_user_id, rate_limiter):
+                continue
 
             try:
                 message_input = MessageInput.model_validate(incoming_payload)
@@ -32,16 +46,28 @@ async def handle_websocket_session(websocket: WebSocket, settings, connection_se
                 await websocket.send_json(WebSocketEvent(type="error", error=en.MESSAGE_CONTENT_EMPTY).model_dump())
                 continue
 
-            database_session = session_factory()
-            try:
-                message = persist_message(database_session, current_user_id, message_input.receiver_id, clean_content)
-            finally:
-                database_session.close()
+            # Phase 3: Kafka Async Pipeline
+            # We generate the ID and timestamp now to ensure the UI gets immediate confirmation
+            message_data = {
+                "id": str(uuid.uuid4()),
+                "sender_id": current_user_id,
+                "receiver_id": message_input.receiver_id,
+                "content": clean_content,
+                "created_at": datetime.now(UTC).isoformat()
+            }
 
-            response_payload = WebSocketEvent(type="message", message=message).model_dump(mode="json")
+            # Ship to Kafka
+            await kafka_producer.send_message("messages-topic", message_data)
+
+            # Broadcast to connected clients (any server instance)
+            response_payload = WebSocketEvent(
+                type="message", 
+                message=MessageResponse(**message_data)
+            ).model_dump(mode="json")
+            
             await connection_service.send_to_user(current_user_id, response_payload)
-            if message.receiver_id != current_user_id:
-                await connection_service.send_to_user(message.receiver_id, response_payload)
+            if message_data["receiver_id"] != current_user_id:
+                await connection_service.send_to_user(message_data["receiver_id"], response_payload)
     except WebSocketDisconnect:
         await connection_service.disconnect(current_user_id, websocket)
     except Exception:

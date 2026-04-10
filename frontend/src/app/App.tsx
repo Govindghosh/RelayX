@@ -3,64 +3,73 @@ import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { LoaderCircle } from "lucide-react";
 
 import { APP_ROUTES } from "../constants/storage";
-import { useSession } from "../hooks/useSession";
 import ChatPage from "../pages/ChatPage";
 import LoginPage from "../pages/LoginPage";
 import SignupPage from "../pages/SignupPage";
-import { ApiError, getCurrentUser, refreshAccessToken } from "../services/api/client";
+import { useAppDispatch, useAppSelector } from "../store";
+import { setCredentials, logout as logoutAction } from "../store/slices/authSlice";
+import axiosInstance, { getAccessToken } from "../api/axiosInstance";
+import SummaryApi from "../api/SummaryApi";
+import type { Session } from "../types/session";
 
 export default function App() {
   const navigate = useNavigate();
-  const { session, setSession } = useSession();
+  const dispatch = useAppDispatch();
+  const { isAuthenticated, user, token } = useAppSelector((state) => state.auth);
   const [isBootstrapping, setIsBootstrapping] = useState(true);
 
-  function handleLogout() {
-    setSession(null);
-    navigate(APP_ROUTES.login);
+  const session: Session | null = isAuthenticated && user && token ? {
+    accessToken: token,
+    refreshToken: "", // Refresh token not persistence in this slice yet
+    user: user,
+  } : null;
+
+  async function handleLogout() {
+    try {
+      if (isAuthenticated) {
+        await axiosInstance.post(SummaryApi.auth.logout.url);
+      }
+    } catch {
+      // Ignore failures - local logout is priority
+    } finally {
+      dispatch(logoutAction());
+      navigate(APP_ROUTES.login);
+    }
+  }
+
+  function handleAuthenticated(newSession: Session | null) {
+    if (!newSession) {
+      dispatch(logoutAction());
+      return;
+    }
+    dispatch(setCredentials({
+      user: newSession.user,
+      token: newSession.accessToken,
+    }));
   }
 
   useEffect(() => {
     let isActive = true;
 
     async function bootstrapSession() {
-      if (!session) {
-        setIsBootstrapping(false);
-        return;
-      }
-
       try {
-        const currentUser = await getCurrentUser(session.accessToken);
-        if (!isActive) {
-          return;
-        }
+        // Attempt to get current user. 
+        // If access token is missing/expired, axios interceptor will try to refresh using cookie.
+        const response = await axiosInstance(SummaryApi.auth.me);
+        if (!isActive) return;
 
-        setSession({
-          ...session,
-          user: currentUser,
-        });
+        // If we get here, we either had a valid access token or successfully refreshed.
+        // We need to capture the access token if it was refreshed.
+        const currentToken = getAccessToken();
+        
+        dispatch(setCredentials({
+          user: response.data,
+          token: currentToken,
+        }));
       } catch (error) {
-        const canRefresh = error instanceof ApiError && error.status === 401;
-        if (!canRefresh) {
+        if (isActive) {
+          // Both access and refresh tokens failed/missing
           handleLogout();
-          return;
-        }
-
-        try {
-          const refreshed = await refreshAccessToken(session.refreshToken);
-          const currentUser = await getCurrentUser(refreshed.access_token);
-          if (!isActive) {
-            return;
-          }
-
-          setSession({
-            ...session,
-            accessToken: refreshed.access_token,
-            user: currentUser,
-          });
-        } catch {
-          if (isActive) {
-            handleLogout();
-          }
         }
       } finally {
         if (isActive) {
@@ -84,7 +93,7 @@ export default function App() {
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.32em] text-cyan-200/80">RelayX Startup</p>
             <h1 className="mt-2 font-display text-3xl text-white">Preparing your workspace</h1>
-            <p className="mt-2 text-sm text-slate-400">Checking the stored JWT session and reconnecting the chat client.</p>
+            <p className="mt-2 text-sm text-slate-400">Verifying session and connecting to services.</p>
           </div>
         </div>
       </main>
@@ -94,24 +103,24 @@ export default function App() {
   return (
     <Routes>
       <Route
-        element={session ? <Navigate replace to={APP_ROUTES.chat} /> : <LoginPage onAuthenticated={setSession} />}
+        element={isAuthenticated ? <Navigate replace to={APP_ROUTES.chat} /> : <LoginPage onAuthenticated={handleAuthenticated} />}
         path={APP_ROUTES.login}
       />
       <Route
-        element={session ? <Navigate replace to={APP_ROUTES.chat} /> : <SignupPage onAuthenticated={setSession} />}
+        element={isAuthenticated ? <Navigate replace to={APP_ROUTES.chat} /> : <SignupPage onAuthenticated={handleAuthenticated} />}
         path={APP_ROUTES.signup}
       />
       <Route
         element={
-          session ? (
-            <ChatPage onLogout={handleLogout} onSessionChange={setSession} session={session} />
+          isAuthenticated && session ? (
+            <ChatPage onLogout={handleLogout} onSessionChange={handleAuthenticated} session={session} />
           ) : (
             <Navigate replace to={APP_ROUTES.login} />
           )
         }
         path={APP_ROUTES.chat}
       />
-      <Route element={<Navigate replace to={session ? APP_ROUTES.chat : APP_ROUTES.login} />} path="*" />
+      <Route element={<Navigate replace to={isAuthenticated ? APP_ROUTES.chat : APP_ROUTES.login} />} path="*" />
     </Routes>
   );
 }
